@@ -2,6 +2,7 @@
     "files.associations": {
         "stdint.h": "c",
         "if.h": "c",
-        "ioctl.h": "c"
+        "ioctl.h": "c",
+        "raw.h": "c"
     }
 }

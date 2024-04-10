@@ -9,36 +9,40 @@
 
 #include "can.h"
 
-#define CAN_DEVICE "can0"
+#define CAN_DEVICE "vcan0"
+
+static int32_t sock;
 
 int main(void)
 {
-    int sock;
-    uint8_t tx_buffer[1] = {0x00};
-    uint8_t rx_buffer[1] = {0x00};
+    int32_t status = IO_CAN_SUCCESS;
+    int32_t can_id = 0x123;
+    uint8_t tx_buffer[1] = {0x01};
 
-    sock = CAN_Init(0x000);
+    CAN_Init();
 
     while (1)
     {
-        CAN_Write(sock, 0x000, tx_buffer, 1);
+        status = IO_CAN_SUCCESS;
+        
+        if ((status = CAN_Write(can_id, tx_buffer, 1)) < 0)
+        {
+            printf("CAN Error (Error code : %d)\n", status);
+        }
         printf("tx : %d\n", tx_buffer[0]);
-        CAN_Read(sock, 0x000, rx_buffer, 1);
-        printf("rx : %d\n", rx_buffer[0]);
+
         sleep(1);
     }
 }
 
-int CAN_Init(int can_id) 
+int32_t CAN_Init(void)
 {
-    int sock;
     struct ifreq ifr;
     struct sockaddr_can addr;
-    struct can_filter filter;
 
     if ((sock = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0)
     {
-        printf("Socket error!\n");
+        return IO_CAN_ERROR_SOCKET;
     }
 
     strcpy(ifr.ifr_name, CAN_DEVICE);
@@ -46,26 +50,34 @@ int CAN_Init(int can_id)
     addr.can_family = AF_CAN;
     addr.can_ifindex = ifr.ifr_ifindex;
     bind(sock, (struct sockaddr *)&addr, sizeof(addr));
+
+    return IO_CAN_SUCCESS;
+}
+
+int32_t CAN_Read(int can_id, void *rx_buffer, uint8_t len)
+{
+    struct can_filter filter;
+    struct can_frame frame;
+
     filter.can_id = can_id;
     filter.can_mask = CAN_SFF_MASK;
     setsockopt(sock, SOL_CAN_RAW, CAN_RAW_FILTER, &filter, sizeof(filter));
 
-    return sock;
-}
-
-void CAN_Read(int sock, int can_id, void *rx_buffer, uint8_t len)
-{
-    struct can_frame frame;
-
+    if (sock < 0)
+    {
+        return IO_CAN_ERROR_INIT;
+    }
     if (read(sock, &frame, sizeof(frame)) < 0)
     {
-        printf("Read error!\n");
+        return IO_CAN_ERROR_READ;
     }
 
     memcpy(rx_buffer, frame.data, len);
+
+    return IO_CAN_SUCCESS;
 }
 
-void CAN_Write(int sock, int can_id, void *tx_buffer, uint8_t len)
+int32_t CAN_Write(int can_id, void *tx_buffer, uint8_t len)
 {
     struct can_frame frame;
 
@@ -73,8 +85,14 @@ void CAN_Write(int sock, int can_id, void *tx_buffer, uint8_t len)
     frame.can_dlc = len;
     memcpy(frame.data, tx_buffer, len);
 
+    if (sock < 0)
+    {
+        return IO_CAN_ERROR_INIT;
+    }
     if (write(sock, &frame, sizeof(frame)) < 0)
     {
-        printf("Write error!\n");
+        return IO_CAN_ERROR_WRITE;
     }
+
+    return IO_CAN_SUCCESS;
 }
